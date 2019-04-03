@@ -397,11 +397,27 @@ plt.show()
 """
 6. K nearest neighbors classifier (kNN)
 
+Using nested cross-validation to optimize k for the classifier:
+    outer loop (validation): repeated stratified k-fold CV. Repeatedly generates
+    stratified folds from the data. One fold is used for validation, the rest for
+    model training. Using 6 folds & 4 repeats which make up to 24 best ks to choose
+    from.
+    inner loop (model selection): Iterates through the candidates for best k. Trains
+    the knn in leave-one-out fashion (every input once as the test set, the rest
+    as the training set). Calculates loo-predictions for current k.
+
+For each outer loop fold-set, the best k is selected and the best training accuracy
+is stored. The best classifier predicts then the current validation set to simulate
+predicting on unknown data.
 """
 
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.metrics import accuracy_score
+
+
+# set seed for the rest of the exercise for reproduceable calculations
+np.random.seed(0)
 
 
 # Reduce dimensionality with PCA:
@@ -444,32 +460,29 @@ feats_knn = zscore(feats_knn, axis=0) # standardize again
 #print(cv_result)
 
 
-# Use nested cross-validation to optimize k:
+# Nested CV:
 
 ks = range(1, 26) # k candidates (1,2,...,25)
-ks_best = [] # winner ks
-acc_fold = [] # winner k fold-accuracies
+ks_best = [] # winner ks stored here
+acc_fold = [] # winner k training accuracies
 acc_valid = [] # winner k validation accuracies
-
-# use 6-fold cv for outer/validation loop (~20 samples/fold)
-# 4 repeats --> 18 best ks to choose from
 kf = RepeatedStratifiedKFold(n_splits=6, n_repeats=4, random_state=0)
-
 print("\nOptimizing kNN (~1 min)")
 
+# outer loop
 for inds_model, inds_valid in kf.split(feats_knn, labels):
-    # assign model training & validation sets
+    # assign model selection & validation sets
     X_model = feats_knn[inds_model]
     y_model = labels[inds_model]
     X_valid = feats_knn[inds_valid]
     y_valid = labels[inds_valid]
     
-    # find best k for subset
+    # find best k
     acc_ks = []
     for k in ks:
         y_pred = [] # loo predictions
         
-        # use leave-one-out cv for inner/model training loop
+        # inner loop:
         for i in range(len(X_model)):
             # assign test & train set
             X_test = [X_model[i]]
@@ -481,15 +494,15 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
             # predict test & store result
             y_pred.append(knn.predict(X_test))
         
-        # calculate & store k accuracy
+        # calculate & store training accuracy for k
         acc_ks.append(accuracy_score(y_model, y_pred))
     
     # find best k
     ind_best = np.argmax(acc_ks)
     k_best = ks[ind_best]
     ks_best.append(k_best)
-    acc_fold.append(acc_ks[ind_best]) # store best k fold-accuracy
-    # train whole fold with best k
+    acc_fold.append(acc_ks[ind_best]) # store best ks training accuracy
+    # train whole fold-set with best k
     knn = KNeighborsClassifier(n_neighbors=k_best)
     knn.fit(X_model, y_model)
     # predict validation set
@@ -497,16 +510,16 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
     acc_valid.append(accuracy_score(y_valid, y_pred))
 
 
-# Calculate unique counts & averages:
+# Calculate k win counts & averages:
 
 ks_best = np.array(ks_best)
 acc_valid = np.array(acc_valid)
-cv_result = []
+cv_result = [] # concluding result
 
 for k in np.unique(ks_best):
-    cnt = np.count_nonzero(ks_best == k)
+    cnt = np.count_nonzero(ks_best == k) # win count of k
     inds = np.where(ks_best == k)
-    acc = np.mean(acc_valid[inds])
+    acc = np.mean(acc_valid[inds]) # mean validation accuracy of k
     cv_result.append([k, cnt, acc])
     
 cv_result = np.array(cv_result)
@@ -516,7 +529,7 @@ cv_result = np.array(cv_result)
 # (https://stackoverflow.com/a/16486305)
 cv_result = cv_result[cv_result[:,1].argsort()[::-1]]
 print(cv_result)
-k_best = 6
+k_best = 0
 
 
 
