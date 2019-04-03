@@ -505,16 +505,51 @@ print(confusion_matrix(labels_knn, preds_knn))
 
 # Examples:
 
-fig, ax = plt.subplots(2,3)
-ax[0].set_title('correct')
-ax[1].set_title('wrong')
-ax[0,0].imshow(imgs[0])
-ax[0,1].imshow(imgs[0])
-ax[0,2].imshow(imgs[0])
-ax[1,0].imshow(imgs[0])
-ax[1,1].imshow(imgs[0])
-ax[1,2].imshow(imgs[0])
+# birdnests
+fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
+fig.suptitle('kNN birdnests')
+# correct
+ax[0,0].imshow(imgs[3])
+ax[0,1].imshow(imgs[4])
+ax[0,2].imshow(imgs[6])
+ax[0,3].imshow(imgs[7])
+# wrong
+ax[1,0].imshow(imgs[42])
+ax[1,1].imshow(imgs[78])
+ax[1,2].imshow(imgs[81])
+ax[1,3].imshow(imgs[86])
+[ax.set_axis_off() for ax in ax.ravel()] # (https://stackoverflow.com/a/52776192)
 plt.show()
+
+# honeycombs
+fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
+fig.suptitle('kNN honeycombs')
+ax[0,0].imshow(imgs[39])
+ax[0,1].imshow(imgs[40])
+ax[0,2].imshow(imgs[41])
+ax[0,3].imshow(imgs[43])
+ax[1,0].imshow(imgs[2])
+ax[1,1].imshow(imgs[5])
+ax[1,2].imshow(imgs[9])
+ax[1,3].imshow(imgs[16])
+[ax.set_axis_off() for ax in ax.ravel()]
+plt.show()
+
+# lighthouses
+fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
+fig.suptitle('kNN lighthouses')
+ax[0,0].imshow(imgs[77])
+ax[0,1].imshow(imgs[79])
+ax[0,2].imshow(imgs[80])
+ax[0,3].imshow(imgs[82])
+ax[1,0].imshow(imgs[47])
+ax[1,1].imshow(imgs[28])
+ax[1,2].imshow(imgs[35])
+ax[1,3].axis('off') # no more left
+[ax.set_axis_off() for ax in ax.ravel()]
+plt.show()
+
+
 
 #"""
 #7. Ridge regression classifier
