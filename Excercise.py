@@ -618,7 +618,18 @@ preds_mlp = np.array(preds_mlp)
 
 # Evaluate models:
 
-print("\ntrue labels, knn, ridge, mlp")
-preds = pandas.DataFrame(np.column_stack([y_valid, preds_knn, preds_ridge, preds_mlp]))
-print(preds)
+print("\nPredictions")
+preds = pd.DataFrame(np.column_stack([y_valid, preds_knn, preds_ridge, preds_mlp]))
+preds.columns = ['true', 'knn', 'ridge', 'mlp']
+print(preds.to_string(index=False))
+
+print("\nAccuracies")
+print("knn: " + str(accuracy_score(y_valid, preds_knn)))
+print("ridge: " + str(accuracy_score(y_valid, preds_ridge)))
+print("mlp: " + str(accuracy_score(y_valid, preds_mlp)))
+
+print("\nConfusion matrix")
+print("knn:\n", confusion_matrix(y_valid, preds_knn))
+print("ridge:\n", confusion_matrix(y_valid, preds_ridge))
+print("mlp:\n", confusion_matrix(y_valid, preds_mlp))
 
