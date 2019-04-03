@@ -25,7 +25,7 @@ labels = []
 print("\nDownloading images")
 
 # birdnests
-for url in np.loadtxt('birdnests.txt', dtype='U100'):
+for url in np.loadtxt('images/birdnests.txt', dtype='U100'):
     try:
         # add labels after succesful entries
         imgs.append(io.imread(url))
@@ -36,7 +36,7 @@ for url in np.loadtxt('birdnests.txt', dtype='U100'):
 print("set downloaded")
 
 # honeycombs
-for url in np.loadtxt('honeycomb.txt', dtype='U100'):
+for url in np.loadtxt('images/honeycomb.txt', dtype='U100'):
     try:
         imgs.append(io.imread(url))
         labels.append(1)
@@ -45,7 +45,7 @@ for url in np.loadtxt('honeycomb.txt', dtype='U100'):
 print("set downloaded")
 
 # lighthouses
-for url in np.loadtxt('lighthouse.txt', dtype='U100'):
+for url in np.loadtxt('images/lighthouse.txt', dtype='U100'):
     try:
         imgs.append(io.imread(url))
         labels.append(2)
