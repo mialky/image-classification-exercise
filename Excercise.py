@@ -32,8 +32,7 @@ Using a predefined set of methods:
     feature extraction: RGB means & variances, grayscale level co-occurrence matrix, zscore
     visualization: principal component analysis, self-organizing map
     classifiers: k nearest neighbors, Ridge regression, multilayer perceptron
-    optimization: cross-validation, nested cross-validation, early stopping
-    evaluation: accuracy-score, confusion matrix   
+    evaluation: nested cross-validation, early stopping, accuracy-score, confusion matrix   
 
 
 
@@ -82,8 +81,8 @@ print("set downloaded")
 
 # convert to numpy array for later usability
 # TODO: find more efficient way
-#imgs = np.array(imgs)
-#labels = np.array(labels)
+imgs = np.array(imgs)
+labels = np.array(labels)
 
 
 # Retrieve class indices:
@@ -112,7 +111,7 @@ np.random.seed(0)
 In order to compare images pixel by pixel, they need to be in the same size. Find
 the mode width and height of all images, and resize them correspondingly.
 
-Store also grayscale versions of images. The quantization level must be reduced
+Save also grayscale versions of images. The quantization level must be reduced
 to 8 bits for GLCM.
 """
 
@@ -400,23 +399,26 @@ plt.show()
 """
 6. K nearest neighbors classifier (kNN)
 
-Using nested cross-validation to optimize k for the classifier:
-    outer loop (validation): repeated stratified k-fold CV. Repeatedly generates
-    stratified folds from the data. One fold is used for validation, the rest for
-    model training. Using 6 folds & 4 repeats which make up to 24 best ks to choose
-    from.
-    inner loop (model selection): Iterates through the candidates for best k. Trains
-    the knn in leave-one-out fashion (every input once as the test set, the rest
-    as the training set). Calculates loo-predictions for current k.
+kNN doesn't function with high dimensional data. Therefore, reducing dimensions
+with PCA. Reducing RGB-features to 10 PCs and GLCM-features to 5 PCs.
 
-For each outer loop fold-set, the best k is selected and the best training accuracy
-is stored. The best classifier predicts then the current validation set to simulate
-predicting on unknown data.
+Using nested cross-validation to optimize k and validate performance:
+    outer loop (validation): Stratified 10-fold CV. Generates 10 stratified folds
+    from the data. Uses one fold at a time as the test set and the rest as the
+    model selection set.
+    inner loop (model selection): Iterates through the candidates for best k. Trains
+    the classifier in leave-one-out CV (one input as the test set, the rest as
+    the training set /iteration). Calculates predictions for current k.
+
+For each outer loop fold-set, the best k is selected by accuracy-%. The best classifier
+is then trained again to predict the validation set to simulate predicting unseen
+data.
 """
 
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import RepeatedStratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
 
 
 # Reduce dimensionality with PCA:
@@ -431,42 +433,17 @@ feats_knn = np.column_stack([pca_rgb, pca_gr]) # merge features
 feats_knn = zscore(feats_knn, axis=0) # standardize again
 
 
-## Use leave-one-out cross-validation to optimize k:
-#
-#ks = range(1, 26) # k candidates (1,2,...,25)
-#acc = [] # k accuracies
-#
-#print("\nOptimizing kNN")
-#
-#for k in ks:
-#    y_pred = [] # loo predictions
-#    
-#    for i in range(len(feats_knn)):
-#        # assign test & train set
-#        X_test = [feats_knn[i]]
-#        X_train = np.delete(feats_knn, i, axis=0)
-#        y_train = np.delete(labels, i)
-#        # train classifier
-#        knn = KNeighborsClassifier(n_neighbors=k)
-#        knn.fit(X_train, y_train)
-#        # predict test & store result
-#        y_pred.append(knn.predict(X_test)[0])
-#    
-#    # calculate & store k accuracy
-#    acc.append(accuracy_score(labels, y_pred))
-#
-#cv_result = np.column_stack([ks, acc])
-#print(cv_result)
-
-
 # Nested CV:
 
 ks = range(1, 26) # k candidates (1,2,...,25)
-ks_best = [] # winner ks stored here
+ks_best = [] # winner ks
 acc_train = [] # winner k training accuracies
 acc_valid = [] # winner k validation accuracies
-kf = RepeatedStratifiedKFold(n_splits=6, n_repeats=4, random_state=0)
-print("\nOptimizing kNN (~1 min)")
+inds_knn = [] # # stratification-ordered indices
+labels_knn = [] # stratification-ordered labels
+preds_knn = [] # final predictions
+kf = StratifiedKFold(n_splits=10) # 10 folds
+print("\nRunning kNN")
 
 # outer loop
 for inds_model, inds_valid in kf.split(feats_knn, labels):
@@ -475,13 +452,15 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
     y_model = labels[inds_model]
     X_valid = feats_knn[inds_valid]
     y_valid = labels[inds_valid]
+    # save index & label
+    inds_knn.extend(inds_valid)
+    labels_knn.extend(y_valid)
     
-    # find best k
-    acc_ks = []
+    acc_ks = [] # accuracies of k
     for k in ks:
         y_pred = [] # loo predictions
         
-        # inner loop:
+        # inner loop
         for i in range(len(X_model)):
             # assign test & train set
             X_test = [X_model[i]]
@@ -490,185 +469,189 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
             # train classifier
             knn = KNeighborsClassifier(n_neighbors=k)
             knn.fit(X_train, y_train)
-            # predict test & store result
+            # predict test & save result
             y_pred.append(knn.predict(X_test))
         
-        # calculate & store training accuracy for k
+        # calculate & save training accuracy for k
         acc_ks.append(accuracy_score(y_model, y_pred))
     
     # find best k
     ind_best = np.argmax(acc_ks)
     k_best = ks[ind_best]
     ks_best.append(k_best)
-    acc_train.append(acc_ks[ind_best]) # store best ks training accuracy
+    acc_train.append(acc_ks[ind_best]) # save training accuracy of best k
     # train whole fold-set with best k
     knn = KNeighborsClassifier(n_neighbors=k_best)
     knn.fit(X_model, y_model)
     # predict validation set
-    y_pred = knn.predict(X_valid)
-    acc_valid.append(accuracy_score(y_valid, y_pred))
+    preds = knn.predict(X_valid)
+    preds_knn.extend(preds) # save predictions
+    acc_valid.append(accuracy_score(y_valid, preds)) # save validation accuracy
 
 
-# Calculate k win counts & averages:
+# Evaluation:
 
-ks_best = np.array(ks_best)
-acc_valid = np.array(acc_valid)
-cv_result = [] # concluding result
-
-for k in np.unique(ks_best):
-    cnt = np.count_nonzero(ks_best == k) # win count of k
-    inds = np.where(ks_best == k)
-    acc = np.mean(acc_valid[inds]) # mean validation accuracy of k
-    cv_result.append([k, cnt, acc])
-    
-cv_result = np.array(cv_result)
-
-# sort array descending by k count
-# (https://stackoverflow.com/a/2828121)
-# (https://stackoverflow.com/a/16486305)
-cv_result = cv_result[cv_result[:,1].argsort()[::-1]]
+cv_result = np.column_stack([ks_best, acc_train, acc_valid])
+print("\nbest k,   acc-% (train),   acc-% (valid)")
 print(cv_result)
-k_best = 0
+print("\nOverall accuracy-% (validation): " + str(np.mean(acc_valid)))
+
+# image index, prediction, true label
+cv_preds = np.column_stack([inds_knn, preds_knn, labels_knn])
+
+# confusion matrix
+print(confusion_matrix(labels_knn, preds_knn))
 
 
+# Examples:
 
-"""
-7. Ridge regression classifier
+fig, ax = plt.subplots(2,3)
+ax[0].set_title('correct')
+ax[1].set_title('wrong')
+ax[0,0].imshow(imgs[0])
+ax[0,1].imshow(imgs[0])
+ax[0,2].imshow(imgs[0])
+ax[1,0].imshow(imgs[0])
+ax[1,1].imshow(imgs[0])
+ax[1,2].imshow(imgs[0])
+plt.show()
 
-Ridge regression (reguralized linear model) is similar to least squares, but it
-uses bias to reduce errors on multicollinear data. Ridge regression functions with
-high dimensional data, so using the full feature set.
-
-Using leave-one-out CV for optimizing the alpha. Alpha-hyperparameter affects the
-amount of bias.
-"""
-
-from sklearn.linear_model import RidgeClassifier
-
-
-# Use all features with standardization:
-
-feats_all = np.column_stack([feats_rgb, feats_gr])
-feats_all = zscore(feats_all, axis=0)
-
-
-# Use leave-one-out cross-validation to optimize alpha:
-
-alphas = [0.01, 0.1, 1, 10, 100, 500, 1000, 2000, 5000]
-acc = []
-
-print("\nOptimizing Ridge classifier")
-
-for a in alphas:
-    y_pred = []
-    
-    for i in range(len(feats_all)):
-        X_test = [feats_all[i]]
-        X_train = np.delete(feats_all, i, axis=0)
-        y_train = np.delete(labels, i)
-        ridge = RidgeClassifier(alpha=a)
-        ridge.fit(X_train, y_train)
-        y_pred.append(ridge.predict(X_test)[0])
-    
-    acc.append(accuracy_score(labels, y_pred))
-
-cv_result = np.column_stack([alphas, acc])
-print(cv_result)
-a_best = 1000
-
-
-
-"""
-8. Multilayer perceptron classifier
-
-Feed-forward multilayer perceptron (MLP) with 1 hidden layer of 256 neurons
-(3060 => 256 => 3).
-
-Using cross-validation to
-
-"""
-
-import tensorflow as tf
-from sklearn.model_selection import train_test_split
-
-
-# Craft features for MLP committee/ensemble:
-
-# assign seeds
-np.random.seed(0)
-tf.set_random_seed(0)
-
-# split input to train & validation sets (use all 3060 features)
-# (~ 20 validation images)
-X_train, X_valid, y_train, y_valid = train_test_split(
-        feats_all, labels, test_size=0.2, stratify=labels)
-
-# apply one hot encoding
-y_train_enc = tf.keras.utils.to_categorical(y_train, num_classes=3)
-y_valid_enc = tf.keras.utils.to_categorical(y_valid, num_classes=3)
-
-# split train set to separate folds
-n_members = 3 # use 3 folds/members (~ 30 images/member)
-X_folds = np.array_split(X_train, n_members)
-y_folds = np.array_split(y_train, n_members)
-y_folds_enc = np.array_split(y_train_enc, n_members)
-
-
-# Create MLP ensemble:
-
-dim_h = 256 # hidden layer neurons
-models = []
-models = list()
-
-for i in range(n_members):
-    # define structure
-    model = tf.keras.models.Sequential() # feed-forward
-    model.add(tf.keras.layers.Dense(dim_h, # hidden layer dim
-                                    input_dim=3060, # input dim
-                                    activation='relu'))
-    model.add(tf.keras.layers.Dense(3, # output dim
-                                    activation='softmax'))
-    # compile model
-    model.compile(loss='categorical_crossentropy',
-            optimizer='adam',
-            metrics=['accuracy'])
-    # save model
-    models.append(model)
-
-
-# Train ensemble:
-
-batch_size = 32 # inputs per weight update
-n_epochs = 1000 # max whole set iterations
-
-print(tf.keras.__version__)
-
-print("\nOptimizing MLPs")
-
-for i in range(n_members):
-    print("\nMember " + str(i) + ":")
-    # fit model
-    models[i].fit(X_folds[i], y_folds_enc[i], batch_size, n_epochs, verbose=0,
-              # find early stopping point
-              callbacks=[tf.keras.callbacks.EarlyStopping(
-                      monitor='val_loss', # value to optimize
-                      patience=100, # checks after local minimum
-                      verbose=1,
-                      mode='min', # minimize/maximize
-                      restore_best_weights=True)], # apply minimum
-              validation_data=(X_valid, y_valid_enc))
-
-## clear session/GPU memory
-#tf.keras.backend.clear_session()
-
-
-
-"""
-9. Model evaluation/comparison
-
-"""
-
-import pandas as pd
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import StratifiedKFold
-
+#"""
+#7. Ridge regression classifier
+#
+#Ridge regression (reguralized linear model) is similar to least squares, but it
+#uses bias to reduce errors on multicollinear data. Ridge regression functions with
+#high dimensional data, so using the full feature set.
+#
+#Using leave-one-out CV for optimizing the alpha. Alpha-hyperparameter affects the
+#amount of bias.
+#"""
+#
+#from sklearn.linear_model import RidgeClassifier
+#
+#
+## Use all features with standardization:
+#
+#feats_all = np.column_stack([feats_rgb, feats_gr])
+#feats_all = zscore(feats_all, axis=0)
+#
+#
+## Use leave-one-out cross-validation to optimize alpha:
+#
+#alphas = [0.01, 0.1, 1, 10, 100, 500, 1000, 2000, 5000]
+#acc = []
+#
+#print("\nOptimizing Ridge classifier")
+#
+#for a in alphas:
+#    y_pred = []
+#    
+#    for i in range(len(feats_all)):
+#        X_test = [feats_all[i]]
+#        X_train = np.delete(feats_all, i, axis=0)
+#        y_train = np.delete(labels, i)
+#        ridge = RidgeClassifier(alpha=a)
+#        ridge.fit(X_train, y_train)
+#        y_pred.append(ridge.predict(X_test)[0])
+#    
+#    acc.append(accuracy_score(labels, y_pred))
+#
+#cv_result = np.column_stack([alphas, acc])
+#print(cv_result)
+#a_best = 1000
+#
+#
+#
+#"""
+#8. Multilayer perceptron classifier
+#
+#Feed-forward multilayer perceptron (MLP) with 1 hidden layer of 256 neurons
+#(3060 => 256 => 3).
+#
+#Using cross-validation to
+#
+#"""
+#
+#import tensorflow as tf
+#from sklearn.model_selection import train_test_split
+#
+#
+## Craft features for MLP committee/ensemble:
+#
+## assign seeds
+#np.random.seed(0)
+#tf.set_random_seed(0)
+#
+## split input to train & validation sets (use all 3060 features)
+## (~ 20 validation images)
+#X_train, X_valid, y_train, y_valid = train_test_split(
+#        feats_all, labels, test_size=0.2, stratify=labels)
+#
+## apply one hot encoding
+#y_train_enc = tf.keras.utils.to_categorical(y_train, num_classes=3)
+#y_valid_enc = tf.keras.utils.to_categorical(y_valid, num_classes=3)
+#
+## split train set to separate folds
+#n_members = 3 # use 3 folds/members (~ 30 images/member)
+#X_folds = np.array_split(X_train, n_members)
+#y_folds = np.array_split(y_train, n_members)
+#y_folds_enc = np.array_split(y_train_enc, n_members)
+#
+#
+## Create MLP ensemble:
+#
+#dim_h = 256 # hidden layer neurons
+#models = []
+#models = list()
+#
+#for i in range(n_members):
+#    # define structure
+#    model = tf.keras.models.Sequential() # feed-forward
+#    model.add(tf.keras.layers.Dense(dim_h, # hidden layer dim
+#                                    input_dim=3060, # input dim
+#                                    activation='relu'))
+#    model.add(tf.keras.layers.Dense(3, # output dim
+#                                    activation='softmax'))
+#    # compile model
+#    model.compile(loss='categorical_crossentropy',
+#            optimizer='adam',
+#            metrics=['accuracy'])
+#    # save model
+#    models.append(model)
+#
+#
+## Train ensemble:
+#
+#batch_size = 32 # inputs per weight update
+#n_epochs = 1000 # max whole set iterations
+#
+#print(tf.keras.__version__)
+#
+#print("\nOptimizing MLPs")
+#
+#for i in range(n_members):
+#    print("\nMember " + str(i) + ":")
+#    # fit model
+#    models[i].fit(X_folds[i], y_folds_enc[i], batch_size, n_epochs, verbose=0,
+#              # find early stopping point
+#              callbacks=[tf.keras.callbacks.EarlyStopping(
+#                      monitor='val_loss', # value to optimize
+#                      patience=100, # checks after local minimum
+#                      verbose=1,
+#                      mode='min', # minimize/maximize
+#                      restore_best_weights=True)], # apply minimum
+#              validation_data=(X_valid, y_valid_enc))
+#
+### clear session/GPU memory
+##tf.keras.backend.clear_session()
+#
+#
+#
+#"""
+#9. Model evaluation/comparison
+#
+#"""
+#
+#import pandas as pd
+#from sklearn.model_selection import StratifiedKFold
+#
