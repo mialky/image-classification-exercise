@@ -678,7 +678,7 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
                       mode='min', restore_best_weights=True)],
               validation_data=(X_valid, y_valid_enc))
     
-    y_mlp.append(model.predict_classes(X_valid_enc))
+    y_mlp.append(model.predict_classes(X_valid))
 
 
 
