@@ -10,9 +10,6 @@ Created on Wed Mar 13 13:39:26 2019
 
 ############################## 1. Data import #################################
 
-# BONUS: Choose your own object, retrieve the URLs for it, and use it as the
-# fourth image set
-
 import numpy as np
 from skimage import io
 
@@ -121,8 +118,6 @@ plt.show()
 
 
 ############################## 3. Feature extraction ##########################
-
-# BONUS: Use some other feature. Include a reference to the method you chose
 
 from skimage.feature import greycomatrix, greycoprops
 from scipy.stats import zscore
@@ -446,6 +441,7 @@ cv_result = np.array(cv_result)
 # (https://stackoverflow.com/a/16486305)
 cv_result = cv_result[cv_result[:,1].argsort()[::-1]]
 print(cv_result)
+k_best = 6
 
 
 
@@ -482,6 +478,7 @@ for a in alphas:
 
 cv_result = np.column_stack([alphas, acc])
 print(cv_result)
+a_best = 1000
 
 
 
@@ -573,8 +570,6 @@ from sklearn.metrics import confusion_matrix
 
 # kNN:
 
-k_best = 6
-
 # concatenate for PCA & standardization
 X_knn = np.concatenate((X_train, X_valid), axis=0)
 pca = PCA(n_components=10)
@@ -592,8 +587,6 @@ preds_knn = knn.predict(X_valid_knn)
 
 
 # Ridge classifier:
-
-alpha = 1000
 
 ridge = RidgeClassifier(alpha=1000)
 ridge.fit(X_train, y_train)
@@ -632,4 +625,61 @@ print("\nConfusion matrix")
 print("knn:\n", confusion_matrix(y_valid, preds_knn))
 print("ridge:\n", confusion_matrix(y_valid, preds_ridge))
 print("mlp:\n", confusion_matrix(y_valid, preds_mlp))
+
+
+############################## 10. Cross validation ###########################
+
+from sklearn.model_selection import StratifiedKFold
+
+
+# Use 6-fold cross-validation on all models (~20 samples/fold):
+
+kf = StratifiedKFold(n_splits=6)
+y_real = []
+y_knn = []
+y_ridge = []
+y_mlp = []
+
+print("\nEstimating accuracy")
+
+for inds_model, inds_valid in kf.split(feats_knn, labels):
+    # assign train & validation sets
+    X_train = feats_all[inds_model]
+    y_train = labels[inds_model]
+    X_valid = feats_all[inds_valid]
+    y_valid = labels[inds_valid]
+    X_train_knn = feats_knn[inds_model]
+    X_valid_knn = feats_knn[inds_valid]
+    y_train_enc = tf.keras.utils.to_categorical(y_train, num_classes=3)
+    y_valid_enc = tf.keras.utils.to_categorical(y_valid, num_classes=3)
+    # save real
+    y_real.append(y_valid)
+    # train knn
+    knn = KNeighborsClassifier(n_neighbors=k_best)
+    knn.fit(X_train_knn, y_train)
+    y_knn.append(knn.predict(X_valid_knn))
+    # train ridge
+    ridge = RidgeClassifier(alpha=a_best)
+    ridge.fit(X_train, y_train)
+    y_ridge.append(ridge.predict(X_valid))
+    
+    # Train single mlp instead of committee/ensemble:
+    
+    tf.keras.backend.clear_session()
+    
+    model = tf.keras.models.Sequential()
+    model.add(tf.keras.layers.Dense(dim_h, input_dim=3060, activation='relu'))
+    model.add(tf.keras.layers.Dense(3, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    
+    model.fit(X_train, y_train_enc, epochs=100, verbose=0,
+              callbacks=[tf.keras.callbacks.EarlyStopping(
+                      monitor='val_loss', patience=100, verbose=1,
+                      mode='min', restore_best_weights=True)],
+              validation_data=(X_valid, y_valid_enc))
+    
+    y_mlp.append(model.predict_classes(X_valid_enc))
+
+
+
 
