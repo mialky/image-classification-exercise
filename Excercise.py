@@ -1,34 +1,64 @@
 # -*- coding: utf-8 -*-
 
 """
+University of Turku
 Machine Learning and Pattern Recognition - Excercise Project
 
 Created on Wed Mar 13 13:39:26 2019
+@author: Mikael Kylänpää
 
-@author: Mikael Kylanpaa
+
+--- Introduction ---
+
+The tasks of this exercise are to acquire a set of images, extract features from
+them, and train a set of classifiers to predict the contents of the images.
+
+
+--- Data set ---
+
+Using a premade set of image URLs located in text files:
+    birdnests.txt: 39 birdnest images
+    honeycomb.txt: 39 honeycomb images
+    lighthouses.txt: 42 lighthouse images
+
+There can be faulty URLs, so the image counts may vary. The images are colorful
+and come in varying sizes.
+
+
+--- Methods ---
+
+Using a predefined set of methods:
+    preparation: resize, grayscale
+    feature extraction: RGB means & variances, grayscale level co-occurrence matrix
+    visualization: principal component analysis, self-organizing map
+    classifiers: k nearest neighbors, Ridge regression, multilayer perceptron
+    optimization: cross-validation, nested cross-validation, early stopping
+    evaluation: accuracy-score, confusion matrix   
+
+
+
+1. Data import
+
+Download images and assign integers as class-labels:
+    (birdnests: 0, honeycombs: 1, lighthouses: 2)  
 """
-
-############################## 1. Data import #################################
 
 import numpy as np
 from skimage import io
 
 
-# Load images & assign labels (birdnests: 0, honeycombs: 1, lighthouses: 2):
-
-imgs = []
+imgs = [] # raw images
 labels = []
-
 print("\nDownloading images")
 
 # birdnests
 for url in np.loadtxt('images/birdnests.txt', dtype='U100'):
     try:
-        # add labels after succesful entries
+        # add label after succesful entry
         imgs.append(io.imread(url))
         labels.append(0)
     except:
-        # skip faulty URLs
+        # skip faulty URL
         continue
 print("set downloaded")
 
@@ -50,10 +80,15 @@ for url in np.loadtxt('images/lighthouse.txt', dtype='U100'):
         continue
 print("set downloaded")
 
+# convert to numpy array for later usability
+# TODO: find more efficient way
+#imgs = np.array(imgs)
+#labels = np.array(labels)
+
 
 # Retrieve class indices:
+# TODO: find more efficient way
 
-labels = np.array(labels)
 inds1 = []
 inds2 = []
 inds3 = []
@@ -68,7 +103,15 @@ for i in range(len(labels)):
 
 
 
-############################## 2. Data preparation ############################
+"""
+2. Data preparation
+
+In order to compare images pixel by pixel, they need to be in the same size. Find
+the mode width and height of all images, and resize them correspondingly.
+
+Store also grayscale versions of images. The quantization level must be reduced
+to 8 bits for GLCM.
+"""
 
 import matplotlib.pyplot as plt
 from statistics import mode
@@ -77,7 +120,7 @@ from skimage.color import rgb2gray
 from skimage import img_as_ubyte
 
 
-# Store image sizes:
+# Calculate mode sizes:
 
 ws = []
 hs = []
@@ -87,7 +130,7 @@ for img in imgs:
     hs.append(len(img[0]))
 
 
-# Resize images to mode w & h:
+# Resize images:
 
 for i in range(len(imgs)):
     imgs[i] = resize(imgs[i], (mode(ws), mode(hs)))
@@ -101,14 +144,14 @@ ax[1,1].imshow(imgs[inds3[0]])
 plt.show()
 
 
-# Convert images to grayscale (for GLCM):
+# Convert to grayscale:
 
 imgs_gr = []
 
 for i in range(len(imgs)):
     imgs_gr.append(rgb2gray(imgs[i]))
 
-# reduce quantization level (8-bit u-int)
+# reduce quantization (8-bit u-int)
 for i in range(len(imgs_gr)):
     imgs_gr[i] = img_as_ubyte(imgs_gr[i])
 
@@ -117,7 +160,21 @@ plt.show()
 
 
 
-############################## 3. Feature extraction ##########################
+"""
+3. Feature extraction
+
+From color images, extract the RGB means and variances per horizontal pixel (vertically).
+This sums up to 500 (image height) x 3 (color channels) x 2 (mean & variance)
+= 3000 features per image.
+
+Extract grayscale level co-occurrence features from grayscale images. This is usually
+done by selecting different patches from different parts of the image. In this
+case, let's select 3 different sized patches from the center of the image, assuming
+that the main element is in the center. A GLC-matrix is contructed from the patch,
+in this case by 4 different angles. From every GLCM, 5 different values are extracted.
+This makes 3 (patches) x 4 (angles) x 5 (values) = 60 features per grayscale image.
+
+"""
 
 from skimage.feature import greycomatrix, greycoprops
 from scipy.stats import zscore
@@ -125,9 +182,7 @@ from scipy.stats import zscore
 
 # Extract means & variances of RGB channels:
 
-imgs = np.array(imgs)
-feats_rgb = []
-
+feats_rgb = [] # feature array
 print("\nExtracting RGB")
 
 for img in imgs:
@@ -163,7 +218,6 @@ print(feats_rgb.shape)
 # Extract GLCM features:
 
 feats_gr = []
-
 print("\nExtracting GLCM")
 
 for img in imgs_gr:
@@ -197,7 +251,10 @@ feats_gr = zscore(feats_gr, axis=0)
 
 
 
-############################# 4. Visualization - PCA #########################
+"""
+4. Principal component analysis (PCA)
+
+"""
 
 from sklearn.decomposition import PCA
 
@@ -249,7 +306,10 @@ plt.show()
 
 
 
-############################## 5. Visualization - SOM #########################
+"""
+5. Self-organizing maps (SOM)
+
+"""
 
 from minisom import MiniSom
 
@@ -322,7 +382,10 @@ plt.show()
 
 
 
-############################# 6. kNN classifier ##############################
+"""
+6. K nearest neighbors classifier (kNN)
+
+"""
 
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import RepeatedStratifiedKFold
@@ -445,7 +508,10 @@ k_best = 6
 
 
 
-############################# 7. Ridge classifier ############################
+"""
+7. Ridge regression classifier
+
+"""
 
 from sklearn.linear_model import RidgeClassifier
 
@@ -482,7 +548,10 @@ a_best = 1000
 
 
 
-############################# 8. Multi-layer perceptron ######################
+"""
+8. Multilayer perceptron classifier
+
+"""
 
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
@@ -559,7 +628,10 @@ for i in range(n_members):
 
 
 
-############################## 9. Accuracy estimation #########################
+"""
+9. Model evaluation/comparison
+
+"""
 
 import pandas as pd
 from sklearn.metrics import confusion_matrix
@@ -627,8 +699,6 @@ print("ridge:\n", confusion_matrix(y_valid, preds_ridge))
 print("mlp:\n", confusion_matrix(y_valid, preds_mlp))
 
 
-############################## 10. Cross validation ###########################
-
 from sklearn.model_selection import StratifiedKFold
 
 
@@ -640,7 +710,7 @@ y_knn = []
 y_ridge = []
 y_mlp = []
 
-print("\nEstimating accuracy")
+print("\nCross validating accuracy")
 
 for inds_model, inds_valid in kf.split(feats_knn, labels):
     # assign train & validation sets
@@ -653,15 +723,15 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
     y_train_enc = tf.keras.utils.to_categorical(y_train, num_classes=3)
     y_valid_enc = tf.keras.utils.to_categorical(y_valid, num_classes=3)
     # save real
-    y_real.append(y_valid)
+    y_real.extend(y_valid)
     # train knn
     knn = KNeighborsClassifier(n_neighbors=k_best)
     knn.fit(X_train_knn, y_train)
-    y_knn.append(knn.predict(X_valid_knn))
+    y_knn.extend(knn.predict(X_valid_knn))
     # train ridge
     ridge = RidgeClassifier(alpha=a_best)
     ridge.fit(X_train, y_train)
-    y_ridge.append(ridge.predict(X_valid))
+    y_ridge.extend(ridge.predict(X_valid))
     
     # Train single mlp instead of committee/ensemble:
     
@@ -678,8 +748,6 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
                       mode='min', restore_best_weights=True)],
               validation_data=(X_valid, y_valid_enc))
     
-    y_mlp.append(model.predict_classes(X_valid))
+    y_mlp.extend(model.predict_classes(X_valid))
 
-
-
-
+cv_result = np.column_stack([y_real, y_knn, y_ridge, y_mlp])
