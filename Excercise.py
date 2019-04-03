@@ -29,7 +29,7 @@ and come in varying sizes.
 
 Using a predefined set of methods:
     preparation: resize, grayscale
-    feature extraction: RGB means & variances, grayscale level co-occurrence matrix
+    feature extraction: RGB means & variances, grayscale level co-occurrence matrix, zscore
     visualization: principal component analysis, self-organizing map
     classifiers: k nearest neighbors, Ridge regression, multilayer perceptron
     optimization: cross-validation, nested cross-validation, early stopping
@@ -174,13 +174,15 @@ that the main element is in the center. A GLC-matrix is contructed from the patc
 in this case by 4 different angles. From every GLCM, 5 different values are extracted.
 This makes 3 (patches) x 4 (angles) x 5 (values) = 60 features per grayscale image.
 
+The two feature sets are first standardized individually by zscore. This scales
+all feature columns into same limit for each set.
 """
 
 from skimage.feature import greycomatrix, greycoprops
 from scipy.stats import zscore
 
 
-# Extract means & variances of RGB channels:
+# Extract RGB features:
 
 feats_rgb = [] # feature array
 print("\nExtracting RGB")
@@ -221,17 +223,19 @@ feats_gr = []
 print("\nExtracting GLCM")
 
 for img in imgs_gr:
-    # select some patches from middle
+    # select patches from center
     patches = []
-    patches.append(img[225:275, 225:275])
-    patches.append(img[200:300, 200:300])
-    patches.append(img[125:375, 125:375])
+    patches.append(img[225:275, 225:275]) # 50x50
+    patches.append(img[200:300, 200:300]) # 100x100
+    patches.append(img[125:375, 125:375]) # 200x200
     
     feat_vect = []
     for patch in patches:
-        # compute GLCM matrix from few angles
-        glcm = greycomatrix(patch, distances=[5], angles=[0, np.pi/4, np.pi/2,
-                            3*np.pi/4], levels=256, symmetric=True, normed=True)
+        # compute GLCM matrix
+        glcm = greycomatrix(patch, distances=[5],
+                            angles=[0, np.pi/4, np.pi/2, 3*np.pi/4], # angle radians
+                            levels=256, # 256 for an 8-bit image
+                            symmetric=True, normed=True)
         # compute & add GLCM values
         feat_vect.extend(greycoprops(glcm, 'contrast')[0][:])
         feat_vect.extend(greycoprops(glcm, 'dissimilarity')[0][:])
@@ -245,7 +249,7 @@ feats_gr = np.array(feats_gr)
 print(feats_gr.shape)
 
 
-# Standardize features by z-score:
+# Zscore standardization:
 feats_rgb = zscore(feats_rgb, axis=0)
 feats_gr = zscore(feats_gr, axis=0)
 
@@ -254,19 +258,23 @@ feats_gr = zscore(feats_gr, axis=0)
 """
 4. Principal component analysis (PCA)
 
+Reduce feature dimensionality to 2 principal components and plot the data. Plot
+the feature sets first individually. Produce also combined PCA, by merging the prior
+principal components, standardizing them to same scale with zscore and running
+another PCA on them.
 """
 
 from sklearn.decomposition import PCA
 
 
-# Principal Component Analysis (2 PCs):
+# PCA:
 
-# RGB & GLCM separately
+# separate
 pca = PCA(n_components=2)
 pca_rgb = pca.fit_transform(feats_rgb)
 pca_gr = pca.fit_transform(feats_gr)
 
-# RGB & GLCM combined
+# combined
 feats_pcas = np.column_stack([pca_rgb, pca_gr]) # merge results
 feats_pcas = zscore(feats_pcas, axis=0) # standardize
 pca_comb = pca.fit_transform(feats_pcas) # PCA again
@@ -309,24 +317,28 @@ plt.show()
 """
 5. Self-organizing maps (SOM)
 
+Visualize features with self-organizing maps. Similar to PCA, SOM enables the strucure
+of the data to be visualized in 2D. Let's visualize both the RGB and GLCM feature
+sets individually.
+
+Using MiniSom library (https://github.com/JustGlowing/minisom)
+From the documentation:
+    "if your dataset has 150 samples, 5*sqrt(150) = 61.23
+    hence a map 8-by-8 should perform well."
+Using 8x7 (=56) grid with this data. 
+
 """
 
 from minisom import MiniSom
-
-
-# Using MiniSom library (https://github.com/JustGlowing/minisom):
-
-# "if your dataset has 150 samples, 5*sqrt(150) = 61.23
-# hence a map 8-by-8 should perform well."
-
-# --> 54.5, will use 8x7 (=56) grid
 
 
 # Train RGB SOM:
 
 print("\nTraining SOM")
 som = MiniSom(8, 7, len(feats_rgb[0]))
-som.train_random(feats_rgb, 20000, verbose=True)
+som.train_random(feats_rgb,
+                 20000, # iterations
+                 verbose=True)
 
 # draw nodes, background coloring
 plt.figure(figsize=(8,7))
