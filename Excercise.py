@@ -101,6 +101,9 @@ for i in range(len(labels)):
     if labels[i] == 2: # lighthouses
         inds3.append(i)
 
+# set seed for the rest of the exercise for reproduceable calculations
+np.random.seed(0)
+
 
 
 """
@@ -416,10 +419,6 @@ from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.metrics import accuracy_score
 
 
-# set seed for the rest of the exercise for reproduceable calculations
-np.random.seed(0)
-
-
 # Reduce dimensionality with PCA:
 
 pca = PCA(n_components=10) # 10 for RGB
@@ -464,7 +463,7 @@ feats_knn = zscore(feats_knn, axis=0) # standardize again
 
 ks = range(1, 26) # k candidates (1,2,...,25)
 ks_best = [] # winner ks stored here
-acc_fold = [] # winner k training accuracies
+acc_train = [] # winner k training accuracies
 acc_valid = [] # winner k validation accuracies
 kf = RepeatedStratifiedKFold(n_splits=6, n_repeats=4, random_state=0)
 print("\nOptimizing kNN (~1 min)")
@@ -501,7 +500,7 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
     ind_best = np.argmax(acc_ks)
     k_best = ks[ind_best]
     ks_best.append(k_best)
-    acc_fold.append(acc_ks[ind_best]) # store best ks training accuracy
+    acc_train.append(acc_ks[ind_best]) # store best ks training accuracy
     # train whole fold-set with best k
     knn = KNeighborsClassifier(n_neighbors=k_best)
     knn.fit(X_model, y_model)
@@ -536,6 +535,12 @@ k_best = 0
 """
 7. Ridge regression classifier
 
+Ridge regression (reguralized linear model) is similar to least squares, but it
+uses bias to reduce errors on multicollinear data. Ridge regression functions with
+high dimensional data, so using the full feature set.
+
+Using leave-one-out CV for optimizing the alpha. Alpha-hyperparameter affects the
+amount of bias.
 """
 
 from sklearn.linear_model import RidgeClassifier
@@ -575,6 +580,11 @@ a_best = 1000
 
 """
 8. Multilayer perceptron classifier
+
+Feed-forward multilayer perceptron (MLP) with 1 hidden layer of 256 neurons
+(3060 => 256 => 3).
+
+Using cross-validation to
 
 """
 
@@ -660,119 +670,5 @@ for i in range(n_members):
 
 import pandas as pd
 from sklearn.metrics import confusion_matrix
-
-
-# Test optimized classifiers
-# Use same test/validation split from MLP (already fit)
-
-# kNN:
-
-# concatenate for PCA & standardization
-X_knn = np.concatenate((X_train, X_valid), axis=0)
-pca = PCA(n_components=10)
-X_knn = pca.fit_transform(X_knn)
-X_knn = zscore(X_knn, axis=0)
-
-# split again
-X_train_knn = X_knn[:len(X_train)]
-X_valid_knn = X_knn[-len(X_valid):]
-
-# train & evaluate
-knn = KNeighborsClassifier(n_neighbors=k_best)
-knn.fit(X_train_knn, y_train)
-preds_knn = knn.predict(X_valid_knn)
-
-
-# Ridge classifier:
-
-ridge = RidgeClassifier(alpha=1000)
-ridge.fit(X_train, y_train)
-preds_ridge = ridge.predict(X_valid)
-
-
-# MLP committee:
-
-preds_mlp = []
-
-for i in range(len(X_valid)):
-    inst = np.expand_dims(X_valid[i], axis=0) # single input to correct format
-    preds = [] # instance predictions
-    
-    for j in range(n_members):
-        preds.append(models[j].predict(inst))
-    means = np.mean(preds, axis=0) # calculate ensemble mean
-    preds_mlp.append(np.argmax(means)) # store ensemble prediction
-
-preds_mlp = np.array(preds_mlp)
-
-
-# Evaluate models:
-
-print("\nPredictions")
-preds = pd.DataFrame(np.column_stack([y_valid, preds_knn, preds_ridge, preds_mlp]))
-preds.columns = ['true', 'knn', 'ridge', 'mlp']
-print(preds.to_string(index=False))
-
-print("\nAccuracies")
-print("knn: " + str(accuracy_score(y_valid, preds_knn)))
-print("ridge: " + str(accuracy_score(y_valid, preds_ridge)))
-print("mlp: " + str(accuracy_score(y_valid, preds_mlp)))
-
-print("\nConfusion matrix")
-print("knn:\n", confusion_matrix(y_valid, preds_knn))
-print("ridge:\n", confusion_matrix(y_valid, preds_ridge))
-print("mlp:\n", confusion_matrix(y_valid, preds_mlp))
-
-
 from sklearn.model_selection import StratifiedKFold
 
-
-# Use 6-fold cross-validation on all models (~20 samples/fold):
-
-kf = StratifiedKFold(n_splits=6)
-y_real = []
-y_knn = []
-y_ridge = []
-y_mlp = []
-
-print("\nCross validating accuracy")
-
-for inds_model, inds_valid in kf.split(feats_knn, labels):
-    # assign train & validation sets
-    X_train = feats_all[inds_model]
-    y_train = labels[inds_model]
-    X_valid = feats_all[inds_valid]
-    y_valid = labels[inds_valid]
-    X_train_knn = feats_knn[inds_model]
-    X_valid_knn = feats_knn[inds_valid]
-    y_train_enc = tf.keras.utils.to_categorical(y_train, num_classes=3)
-    y_valid_enc = tf.keras.utils.to_categorical(y_valid, num_classes=3)
-    # save real
-    y_real.extend(y_valid)
-    # train knn
-    knn = KNeighborsClassifier(n_neighbors=k_best)
-    knn.fit(X_train_knn, y_train)
-    y_knn.extend(knn.predict(X_valid_knn))
-    # train ridge
-    ridge = RidgeClassifier(alpha=a_best)
-    ridge.fit(X_train, y_train)
-    y_ridge.extend(ridge.predict(X_valid))
-    
-    # Train single mlp instead of committee/ensemble:
-    
-    tf.keras.backend.clear_session()
-    
-    model = tf.keras.models.Sequential()
-    model.add(tf.keras.layers.Dense(dim_h, input_dim=3060, activation='relu'))
-    model.add(tf.keras.layers.Dense(3, activation='softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    
-    model.fit(X_train, y_train_enc, epochs=100, verbose=0,
-              callbacks=[tf.keras.callbacks.EarlyStopping(
-                      monitor='val_loss', patience=100, verbose=1,
-                      mode='min', restore_best_weights=True)],
-              validation_data=(X_valid, y_valid_enc))
-    
-    y_mlp.extend(model.predict_classes(X_valid))
-
-cv_result = np.column_stack([y_real, y_knn, y_ridge, y_mlp])
