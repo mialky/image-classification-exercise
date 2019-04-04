@@ -28,12 +28,18 @@ and come in varying sizes.
 
 --- Methods ---
 
-Using a predefined set of methods:
+Using the predefined set of methods:
     preparation: resize, grayscale
     feature extraction: RGB means & variances, grayscale level co-occurrence matrix, zscore
     visualization: principal component analysis, self-organizing map
     classifiers: k nearest neighbors, Ridge regression, multilayer perceptron (neural network)
     evaluation:  cross-validation, nested cross-validation, early stopping, accuracy-score, confusion matrix   
+
+
+--- Data preparation ---
+
+The images are downloaded as they are. No images are excluded from the set apart
+from those that fail to load.
 
 
 
