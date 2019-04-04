@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+
 """
 University of Turku
 Machine Learning and Pattern Recognition - Excercise Project
@@ -45,9 +46,13 @@ Download images and assign integers as class-labels:
 import numpy as np
 from skimage import io
 
+# set seed for the rest of the exercise for reproduceable calculations
+np.random.seed(0)
+
 
 imgs = [] # raw images
 labels = []
+
 print("\nDownloading images")
 
 # birdnests
@@ -99,9 +104,6 @@ for i in range(len(labels)):
         inds2.append(i)
     if labels[i] == 2: # lighthouses
         inds3.append(i)
-
-# set seed for the rest of the exercise for reproduceable calculations
-np.random.seed(0)
 
 
 
@@ -187,6 +189,7 @@ from scipy.stats import zscore
 # Extract RGB features:
 
 feats_rgb = [] # feature array
+
 print("\nExtracting RGB")
 
 for img in imgs:
@@ -222,6 +225,7 @@ print(feats_rgb.shape)
 # Extract GLCM features:
 
 feats_gr = []
+
 print("\nExtracting GLCM")
 
 for img in imgs_gr:
@@ -337,6 +341,7 @@ from minisom import MiniSom
 # Train RGB SOM:
 
 print("\nTraining SOM")
+
 som = MiniSom(8, 7, len(feats_rgb[0]))
 som.train_random(feats_rgb,
                  20000, # iterations
@@ -370,6 +375,7 @@ plt.show()
 # Train GLCM SOM:
 
 print("\nTraining SOM")
+
 som = MiniSom(8, 7, len(feats_gr[0]))
 som.train_random(feats_gr, 50000, verbose=True)
 
@@ -415,6 +421,7 @@ is then trained again to predict the validation set to simulate predicting unsee
 data.
 """
 
+import random
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
@@ -425,10 +432,8 @@ from sklearn.metrics import confusion_matrix
 
 pca = PCA(n_components=10) # 10 for RGB
 pca_rgb = pca.fit_transform(feats_rgb)
-
 pca = PCA(n_components=5) # 5 for GLCM
 pca_gr = pca.fit_transform(feats_gr)
-
 feats_knn = np.column_stack([pca_rgb, pca_gr]) # merge features
 feats_knn = zscore(feats_knn, axis=0) # standardize again
 
@@ -446,7 +451,7 @@ kf = StratifiedKFold(n_splits=10) # 10 folds
 inds_kf = []
 labels_kf = []
 
-print("\nRunning kNN")
+print("\nRunning kNN CV")
 
 # outer loop
 for inds_model, inds_valid in kf.split(feats_knn, labels):
@@ -490,6 +495,7 @@ for inds_model, inds_valid in kf.split(feats_knn, labels):
     preds = knn.predict(X_valid)
     preds_knn.extend(preds) # save predictions
     acc_valid.append(accuracy_score(y_valid, preds)) # save validation accuracy
+    print("fold-set complete")
 
 
 # Evaluation:
@@ -508,49 +514,45 @@ print(confusion_matrix(labels_kf, preds_knn))
 
 # Examples:
 
-# birdnests
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('birdnests')
-# correct
-ax[0,0].imshow(imgs[3])
-ax[0,1].imshow(imgs[4])
-ax[0,2].imshow(imgs[6])
-ax[0,3].imshow(imgs[7])
-# false
-ax[1,0].imshow(imgs[42])
-ax[1,1].imshow(imgs[78])
-ax[1,2].imshow(imgs[81])
-ax[1,3].imshow(imgs[86])
-[ax.set_axis_off() for ax in ax.ravel()] # (https://stackoverflow.com/a/52776192)
-plt.show()
+# plots randomly 4 correct & 4 false classified images for every class
+def explot(inds, preds, labels):
+    for lab in [0,1,2]:
+        corr = []
+        false = []
+        for i in range(len(labels)):
+            if (labels[i] == lab and preds[i] == lab): # true positives
+                corr.append(inds[i])
+            elif (labels[i] != lab and preds[i] == lab): # false positives
+                false.append(inds[i])
+        # random select max 4 inds
+        corr = random.sample(corr, min([len(corr), 4]))
+        false = random.sample(false, min([len(false), 4]))
+        # plot
+        fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
+        if lab == 0:
+            fig.suptitle('classified as birdnests')
+        elif lab == 1:
+            fig.suptitle('classified as honeycombs')
+        else:
+            fig.suptitle('classified as lighthouses')
+        # correct
+        for i in range(4):
+            if i in range(len(corr)):
+                ax[0,i].imshow(imgs[corr[i]])
+                ax[0,i].set_title(corr[i])
+            else:
+                ax[0,i].axis('off') # if under 4 corr found
+        # false
+        for i in range(4):
+            if i in range(len(false)):
+                ax[1,i].imshow(imgs[false[i]])
+                ax[1,i].set_title(false[i])
+            else:
+                ax[0,i].axis('off') # if under 4 false found
+        [ax.set_axis_off() for ax in ax.ravel()] # (https://stackoverflow.com/a/52776192)
+        plt.show()
 
-# honeycombs
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('honeycombs')
-ax[0,0].imshow(imgs[39])
-ax[0,1].imshow(imgs[40])
-ax[0,2].imshow(imgs[41])
-ax[0,3].imshow(imgs[43])
-ax[1,0].imshow(imgs[2])
-ax[1,1].imshow(imgs[5])
-ax[1,2].imshow(imgs[9])
-ax[1,3].imshow(imgs[16]) # TODO: take one lighthouse as well
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
-
-# lighthouses
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('lighthouses')
-ax[0,0].imshow(imgs[77])
-ax[0,1].imshow(imgs[79])
-ax[0,2].imshow(imgs[80])
-ax[0,3].imshow(imgs[82])
-ax[1,0].imshow(imgs[47])
-ax[1,1].imshow(imgs[28])
-ax[1,2].imshow(imgs[35])
-ax[1,3].axis('off') # 3 false only
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
+explot(inds_kf, preds_knn, labels_kf)
 
 
 
@@ -584,7 +586,8 @@ preds_ridge = []
 
 # will generate same folds than kNN, will use same inds_kf & labels_kf
 kf = StratifiedKFold(n_splits=10)
-print("\nRunning Ridge")
+
+print("\nRunning Ridge CV")
 
 for inds_model, inds_valid in kf.split(feats_all, labels):
     X_model = feats_all[inds_model]
@@ -616,8 +619,9 @@ for inds_model, inds_valid in kf.split(feats_all, labels):
     ridge.fit(X_model, y_model)
     # predict validation set
     preds = ridge.predict(X_valid)
-    preds_ridge.extend(preds) # save predictions
-    acc_valid.append(accuracy_score(y_valid, preds)) # save validation accuracy
+    preds_ridge.extend(preds)
+    acc_valid.append(accuracy_score(y_valid, preds))
+    print("fold-set complete")
 
 
 # Evaluation:
@@ -627,51 +631,12 @@ print("\nbest alpha,   acc-% (train),   acc-% (valid)")
 print(cv_result)
 print("\nOverall accuracy-% (validation): " + str(accuracy_score(labels_kf, preds_ridge)))
 cv_preds = np.column_stack([inds_kf, preds_ridge, labels_kf])
-
-# confusion matrix
 print(confusion_matrix(labels_kf, preds_ridge))
 
 
 # Examples:
 
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('birdnests')
-ax[0,0].imshow(imgs[2])
-ax[0,1].imshow(imgs[4])
-ax[0,2].imshow(imgs[6])
-ax[0,3].imshow(imgs[8])
-ax[1,0].imshow(imgs[81])
-ax[1,1].imshow(imgs[45])
-ax[1,2].imshow(imgs[51])
-ax[1,3].imshow(imgs[53])
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
-
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('honeycombs')
-ax[0,0].imshow(imgs[39])
-ax[0,1].imshow(imgs[40])
-ax[0,2].imshow(imgs[41])
-ax[0,3].imshow(imgs[42])
-ax[1,0].imshow(imgs[3])
-ax[1,1].imshow(imgs[5])
-ax[1,2].imshow(imgs[7])
-ax[1,3].imshow(imgs[83])
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
-
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('lighthouses')
-ax[0,0].imshow(imgs[77])
-ax[0,1].imshow(imgs[78])
-ax[0,2].imshow(imgs[79])
-ax[0,3].imshow(imgs[80])
-ax[1,0].imshow(imgs[11])
-ax[1,1].imshow(imgs[47])
-ax[1,2].imshow(imgs[20])
-ax[1,3].imshow(imgs[21])
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
+explot(inds_kf, preds_ridge, labels_kf)
 
 
 
@@ -710,6 +675,7 @@ import tensorflow as tf
 # set TensorFlow seed
 tf.set_random_seed(0)
 
+
 # 10-fold CV:
 
 n_members = 5 # ensemble members
@@ -718,6 +684,7 @@ n_epochs = 100 # training epochs/model
 acc_valid = []
 preds_mlp = []
 kf = StratifiedKFold(n_splits=10)
+
 print("\nRunning MLP")
 
 for inds_train, inds_valid in kf.split(feats_all, labels):
@@ -782,7 +749,6 @@ for inds_train, inds_valid in kf.split(feats_all, labels):
         preds_fold.append(np.bincount(row).argmax())
     acc_valid.append(accuracy_score(y_valid, preds_fold))
     preds_mlp.extend(preds_fold)
-    
     tf.keras.backend.clear_session() # clear GPU memory after ensemble
     print("fold-set complete")
 
@@ -793,48 +759,9 @@ print("\nacc-% (valid) per ensemble:")
 print(acc_valid)
 print("\nOverall accuracy-% (validation): "+ str(accuracy_score(labels_kf, preds_mlp)))
 cv_preds = np.column_stack([inds_kf, preds_mlp, labels_kf])
-
-# confusion matrix
 print(confusion_matrix(labels_kf, preds_mlp))
 
 
 # Examples:
 
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('birdnests')
-ax[0,0].imshow(imgs[2])
-ax[0,1].imshow(imgs[3])
-ax[0,2].imshow(imgs[6])
-ax[0,3].imshow(imgs[8])
-ax[1,0].imshow(imgs[81])
-ax[1,1].imshow(imgs[51])
-ax[1,2].imshow(imgs[92])
-ax[1,3].imshow(imgs[59])
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
-
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('honeycombs')
-ax[0,0].imshow(imgs[39])
-ax[0,1].imshow(imgs[40])
-ax[0,2].imshow(imgs[41])
-ax[0,3].imshow(imgs[42])
-ax[1,0].imshow(imgs[86])
-ax[1,1].imshow(imgs[18])
-ax[1,2].imshow(imgs[97])
-ax[1,3].imshow(imgs[27])
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
-
-fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-fig.suptitle('lighthouses')
-ax[0,0].imshow(imgs[77])
-ax[0,1].imshow(imgs[78])
-ax[0,2].imshow(imgs[79])
-ax[0,3].imshow(imgs[80])
-ax[1,0].imshow(imgs[8])
-ax[1,1].imshow(imgs[47])
-ax[1,2].imshow(imgs[16])
-ax[1,3].imshow(imgs[25])
-[ax.set_axis_off() for ax in ax.ravel()]
-plt.show()
+explot(inds_kf, preds_mlp, labels_kf)
