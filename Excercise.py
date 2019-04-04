@@ -160,10 +160,7 @@ imgs_gr = []
 
 for i in range(len(imgs)):
     imgs_gr.append(rgb2gray(imgs[i]))
-
-# reduce quantization (8-bit u-int)
-for i in range(len(imgs_gr)):
-    imgs_gr[i] = img_as_ubyte(imgs_gr[i])
+    imgs_gr[i] = img_as_ubyte(imgs_gr[i]) # reduce quantization (8-bit u-int)
 
 plt.imshow(imgs_gr[0], cmap='Greys_r')
 plt.show()
@@ -337,8 +334,7 @@ Using MiniSom library (https://github.com/JustGlowing/minisom)
 From the documentation:
     "if your dataset has 150 samples, 5*sqrt(150) = 61.23
     hence a map 8-by-8 should perform well."
-Using 8x7 (=56) grid with this data. 
-
+Using 8x7 (=56) grid with this data.
 """
 
 from minisom import MiniSom
@@ -350,7 +346,7 @@ print("\nTraining SOM")
 
 som = MiniSom(8, 7, len(feats_rgb[0]))
 som.train_random(feats_rgb,
-                 20000, # iterations
+                 20000, # amount of iterations
                  verbose=True)
 
 # draw nodes, background coloring
@@ -373,6 +369,7 @@ for i in range(len(feats_rgb)):
     w = som.winner(feats_rgb[i])
     plt.plot(w[0]+pos, w[1]+.5, 'o', markerfacecolor=colr,
              markersize=15, markeredgewidth=0)
+
 plt.title('RGB SOM, 20000 random samples')
 plt.axis([0, 8, 0, 7])
 plt.show()
@@ -511,54 +508,52 @@ print("\nbest k,   acc-% (train),   acc-% (valid)")
 print(cv_result)
 print("\nOverall accuracy-% (validation): " + str(accuracy_score(labels_kf, preds_knn)))
 
-# image index, prediction, true label
-cv_preds = np.column_stack([inds_kf, preds_knn, labels_kf])
-
 # confusion matrix
 print(confusion_matrix(labels_kf, preds_knn))
 
 
 # Examples:
 
-# plots randomly 4 correct & 4 false classified images for every class
-def explot(inds, preds, labels):
-    for lab in [0,1,2]:
-        corr = []
-        false = []
-        for i in range(len(labels)):
-            if (labels[i] == lab and preds[i] == lab): # true positives
-                corr.append(inds[i])
-            elif (labels[i] != lab and preds[i] == lab): # false positives
-                false.append(inds[i])
-        # random select max 4 inds
-        corr = random.sample(corr, min([len(corr), 4]))
-        false = random.sample(false, min([len(false), 4]))
-        # plot
-        fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
-        if lab == 0:
-            fig.suptitle('classified as birdnests')
-        elif lab == 1:
-            fig.suptitle('classified as honeycombs')
+# plots randomly 4 correct & 4 false classified images for desired class
+def explot(inds, preds, labels, lab):
+    corr = []
+    false = []
+    for i in range(len(labels)):
+        if (labels[i] == lab and preds[i] == lab): # true positives
+            corr.append(inds[i])
+        elif (labels[i] != lab and preds[i] == lab): # false positives
+            false.append(inds[i])
+    # random select max 4 inds
+    corr = random.sample(corr, min([len(corr), 4]))
+    false = random.sample(false, min([len(false), 4]))
+    # plot
+    fig, ax = plt.subplots(2, 4, sharex=True, sharey=True)
+    if lab == 0:
+        fig.suptitle('classified as birdnests')
+    elif lab == 1:
+        fig.suptitle('classified as honeycombs')
+    else:
+        fig.suptitle('classified as lighthouses')
+    # correct
+    for i in range(4):
+        if i in range(len(corr)):
+            ax[0,i].imshow(imgs[corr[i]])
+            ax[0,i].set_title(corr[i])
         else:
-            fig.suptitle('classified as lighthouses')
-        # correct
-        for i in range(4):
-            if i in range(len(corr)):
-                ax[0,i].imshow(imgs[corr[i]])
-                ax[0,i].set_title(corr[i])
-            else:
-                ax[0,i].axis('off') # if under 4 corr found
-        # false
-        for i in range(4):
-            if i in range(len(false)):
-                ax[1,i].imshow(imgs[false[i]])
-                ax[1,i].set_title(false[i])
-            else:
-                ax[0,i].axis('off') # if under 4 false found
-        [ax.set_axis_off() for ax in ax.ravel()] # (https://stackoverflow.com/a/52776192)
-        plt.show()
+            ax[0,i].axis('off') # if under 4 corr found
+    # false
+    for i in range(4):
+        if i in range(len(false)):
+            ax[1,i].imshow(imgs[false[i]])
+            ax[1,i].set_title(false[i])
+        else:
+            ax[0,i].axis('off') # if under 4 false found
+    [ax.set_axis_off() for ax in ax.ravel()] # (https://stackoverflow.com/a/52776192)
+    plt.show()
 
-explot(inds_kf, preds_knn, labels_kf)
+explot(inds_kf, preds_knn, labels_kf, 0) # birdnests
+explot(inds_kf, preds_knn, labels_kf, 1) # honeycombs
+explot(inds_kf, preds_knn, labels_kf, 2) # lighthouses
 
 
 
@@ -636,13 +631,16 @@ cv_result = np.column_stack([as_best, acc_train, acc_valid])
 print("\nbest alpha,   acc-% (train),   acc-% (valid)")
 print(cv_result)
 print("\nOverall accuracy-% (validation): " + str(accuracy_score(labels_kf, preds_ridge)))
-cv_preds = np.column_stack([inds_kf, preds_ridge, labels_kf])
 print(confusion_matrix(labels_kf, preds_ridge))
 
 
 # Examples:
 
-explot(inds_kf, preds_ridge, labels_kf)
+explot(inds_kf, preds_ridge, labels_kf, 0)
+explot(inds_kf, preds_ridge, labels_kf, 1)
+explot(inds_kf, preds_ridge, labels_kf, 2)
+
+
 
 
 
@@ -764,10 +762,11 @@ for inds_train, inds_valid in kf.split(feats_all, labels):
 print("\nacc-% (valid) per ensemble:")
 print(acc_valid)
 print("\nOverall accuracy-% (validation): "+ str(accuracy_score(labels_kf, preds_mlp)))
-cv_preds = np.column_stack([inds_kf, preds_mlp, labels_kf])
 print(confusion_matrix(labels_kf, preds_mlp))
 
 
 # Examples:
 
-explot(inds_kf, preds_mlp, labels_kf)
+explot(inds_kf, preds_mlp, labels_kf, 0)
+explot(inds_kf, preds_mlp, labels_kf, 1)
+explot(inds_kf, preds_mlp, labels_kf, 2)
