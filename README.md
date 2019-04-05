@@ -1,5 +1,19 @@
 # Image recognition of color images
 
+## Contents
+1. [Data import](#1)
+2. [Data preparation](#2)
+3. [Feature extraction](#3)
+4. [Principal component analysis](#4)
+5. [Self-organizing map](#5)
+6. [kNN classifier](#6)
+7. [Ridge regression classifier](#7)
+8. [Multilayer perceptron classifier](#8)
+9. [Results](#res)
+
+
+<br>
+
 ## Introduction
 The task of this exercise is to acquire a set of images, extract features from
 them, and train a set of classifiers to predict the contents of the images.
@@ -28,6 +42,8 @@ The images are downloaded as they are. No images are excluded from the set apart
 from those that fail to load.
 
 ---
+
+<a name="1"></a>
 
 # 1. Data import
 Download images and assign integers as class-labels:
@@ -94,6 +110,8 @@ for i in range(len(labels)):
     set downloaded
     
 
+<a name="2"></a>
+
 # 2. Data preparation
 In order to compare images pixel by pixel, they need to be in the same size. Find
 the mode width and height of all images, and resize them correspondingly.
@@ -151,6 +169,8 @@ plt.show()
 
 ![png](md_resources/output_5_1.png)
 
+
+<a name="3"></a>
 
 # 3. Feature extraction
 From color images, extract the RGB means and variances per horizontal pixel (vertically).
@@ -245,6 +265,8 @@ feats_gr = zscore(feats_gr, axis=0)
     (119, 60)
     
 
+<a name="4"></a>
+
 # 4. Principal component analysis (PCA)
 Reduce feature dimensionality to 2 principal components and plot the data. Plot
 the feature sets first individually. Produce also combined PCA, by merging the prior
@@ -306,6 +328,8 @@ plt.show()
 PCA on pure RGB-features didn't seem to reveal much difference between the classes. However, the GLCM-featureset clearly separated lighthouses from the other 2 classes. This might be due to the clear sky that is in the background for most of the lighthouse images. Let's see how this affects the classifiers.
 
 ---
+
+<a name="5"></a>
 
 # 5. Self-organizing maps (SOM)
 Visualize features with self-organizing maps. Similar to PCA, SOM enables the strucure
@@ -405,6 +429,8 @@ plt.show()
 With only GLCM features, the map separates lighthouses (=green) very well, but fails to find much difference between birdnests and honeycombs. The result is very similar to PCA of GLCM-features.
 
 ---
+
+<a name="6"></a>
 
 # 6. K nearest neighbors classifier (kNN)
 kNN doesn't function with high dimensional data. Therefore, reducing dimensions
@@ -582,6 +608,9 @@ explot(inds_kf, preds_knn, labels_kf, 2) # lighthouses
 
 
 ---
+
+<a name="7"></a>
+
 # 7. Ridge regression classifier
 Ridge regression (reguralized linear model) is similar to least squares, but it
 uses bias to reduce errors on multicollinear data. Ridge regression functions with
@@ -697,6 +726,9 @@ explot(inds_kf, preds_ridge, labels_kf, 2)
 
 
 ---
+
+<a name="8"></a>
+
 # 8. Multilayer perceptron committee/ensemble classifier
 ## Model structure
 Using TensorFlow and Keras to build multilayer perceptrons, which are simple artificial
@@ -857,6 +889,9 @@ explot(inds_kf, preds_mlp, labels_kf, 2)
 
 
 ---
+
+<a name="res"></a>
+
 # Results and discussion
 ### Analysis
 As mainly statistical computations, the kNN and Ridge classifiers didn't obviously find any patterns in the images. For these, the best predictable images were the lighthouses. The reason could be the clear blue sky behind most of the lighthouse images. However, the most separation with the PCA and SOM visualizations originated from the GLCM images which are in grayscale, so the blue color itself should not be the separating factor, but rather the clarity of the background.
