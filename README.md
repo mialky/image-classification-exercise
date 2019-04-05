@@ -1,9 +1,3 @@
-
-Machine Learning and Pattern Recognition - Exercise <br>
-Mikael Kylänpää <br>
-4/4/2019
-
-
 # Image recognition of color images
 
 ## Introduction
